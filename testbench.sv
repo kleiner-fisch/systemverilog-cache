@@ -29,20 +29,22 @@ class transaction;
   bit match_found;
   bit [7:0] read_value;
 
-  /*
+  // TODO Currently the constraints serve to some matches in the cache. 
+  // 	That is we restrict the variety of the keys in the cache to encounter some successful matches.
+  //	This prevents really exploring the complete state space, but otherwise we need many more iterations,
+  //	which does not seem feasible in a free online tool.
   constraint ctrl_find {
-      find dist{ 0:=30, 1:=70};
+    find dist{ 0:=70, 1:=30};
   }
 
-  // TODO constrain that update should be 1 more often than find
   constraint ctrl_update {
       update dist{ 0:=30, 1:=70};
-  }*/
+  }
 
   constraint size_constraint { key < 4; update_value < 16;}
 
   
-  constraint find_update { find != update;}
+  //constraint find_update { find != update;}
   
 
   function void display();
@@ -81,9 +83,16 @@ class generator;
   endfunction 
 
     task run();
-      for(int i = 0; i < 100; i++) begin
-        /*assert (trans.randomize()) else $display("Randomization failed");*/
-        if(i<11) begin
+      for(int i = 0; i < 1000; i++) begin
+        
+        
+        assert (trans.randomize()) else $display("Randomization failed");
+                /*cif.update_value = $urandom_range(0, 127);
+        cif.key = $urandom_range(0, 127);
+        cif.find = $urandom_range(0, 1);
+		cif.update = 1- cif.find ;*/
+        
+        /*if(i<11) begin
           trans.update = 1;
           trans.find = 0;
         end else begin
@@ -92,7 +101,8 @@ class generator;
         end
 
 		trans.key = i%4;
-        trans.update_value = i%16;        
+        trans.update_value = i%16;      
+        */
         $display("[GEN] : DATA SENT TO DRIVER");
         trans.display();
         mbx.put(trans.copy());
@@ -154,7 +164,6 @@ class monitor;
             trans.match_found <= cif.match_found;
 			trans.read_value <= cif.read_value;
           	// wait one full CLOCK_CYCLE_TIME
-			//# 4;
           @(posedge cif.clk);
           	trans.find <= cif.find;
             trans.update <= cif.update;
@@ -183,8 +192,8 @@ class scoreboard;
   
   function initQueues();
     for(int i=0;i<8;i++) begin
-      keys = {keys, 8'bx};
-      values = {values, 8'bx};
+      keys = {keys, 8'b0};
+      values = {values, 8'b0};
     end
   endfunction
 
@@ -261,7 +270,8 @@ module cache_tb ;
 	initial begin
 		cif.reset <= 1;
         cif.clk <= 0;
-		#2;
+      	// to let the reset take effect
+		#4;
 		cif.reset <= 0;
       
       	gen2drv = new();
@@ -276,19 +286,11 @@ module cache_tb ;
 	end
 
 	always @(cif.clk) begin 
-      // value of CLOCK_CYCLE_TIME is 2
 		#2 cif.clk <= ~cif.clk;
 	end
   
   
   	initial begin
-      /*for(int i=0;i<20;i++) begin
-        @(posedge cif.clk)
-        cif.update_value = $urandom_range(0, 127);
-        cif.key = $urandom_range(0, 127);
-        cif.find = $urandom_range(0, 1);
-		cif.update = 1- cif.find ;
-      end*/
       $dumpfile("dump.vcd");
   	  $dumpvars;
       # 400;
@@ -303,8 +305,6 @@ module cache_tb ;
       mon.run();
       sco.run();
     join
-     // wait(gen_done.triggered);
-	//	$finish;
 	end
 
 endmodule 
